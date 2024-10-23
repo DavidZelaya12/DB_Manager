@@ -13,11 +13,18 @@ def CrearUsuario():
     nombre = simpledialog.askstring("Nombre de usuario", "Ingrese el nombre de usuario:")
     contrasena = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
     cursor.execute("CREATE USER "+nombre+" WITH PASSWORD '"+contrasena+"';")
+    connection.commit()
     lista.insert(tk.END, nombre)    
 
-def modificar():
-    resultado_text.insert(tk.END, "Modificando registro...\n")
+def modificar(usuario,nueva_contrasena):
+    cursor.execute("ALTER USER "+usuario+" WITH PASSWORD '"+nueva_contrasena+"';")
+    connection.commit()
 
+def mostrarTablas():
+    resultado_text.delete(1.0, tk.END)
+    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+    for registro in cursor:
+        resultado_text.insert(tk.END, registro[0] + "\n")
 def borrar():
     resultado_text.insert(tk.END, "Borrando registro...\n")
 
@@ -35,7 +42,7 @@ def crear_tab(titulo):
     notebook.add(tab, text=titulo)
     hola = 5
     
-    btn_listar = tk.Button(tab, text="Listar", bg="#3e3e3e", fg="white", command=listar)
+    btn_listar = tk.Button(tab, text="Listar", bg="#3e3e3e", fg="white", command=mostrarTablas)
     btn_listar.pack(pady = hola)
 
     btn_crear = tk.Button(tab, text="Crear", bg="#3e3e3e", fg="white", command=CrearUsuario)
@@ -113,8 +120,10 @@ tk.Label(root, text="Resultado", bg="#1e1e1e", fg="white").pack(anchor=tk.W, pad
 resultado_text = tk.Text(root, height=10, bg="#1e1e1e", fg="white", insertbackground="white")
 resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 
-usuario = simpledialog.askstring("Usuario", "Ingrese su usuario:")
-contrasena = simpledialog.askstring("Contraseña", "Ingrese su contraseña:", show='*')
+#usuario = simpledialog.askstring("Usuario", "Ingrese su usuario:")
+#contrasena = simpledialog.askstring("Contraseña", "Ingrese su contraseña:", show='*')
+usuario = ""
+contrasena = ""
 cursor = SetupConection(usuario,contrasena,"postgres")
 mostrar_conexiones(lista)
 
