@@ -1,5 +1,10 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk,simpledialog
+import psycopg2
+
+host = "localhost" 
+cursor = None
+connection = None
 
 def listar():
     resultado_text.insert(tk.END, "Listando datos...\n")
@@ -16,6 +21,41 @@ def borrar():
 def mostrar_ddl():
     resultado_text.insert(tk.END, "Mostrando DDL...\n")
 
+def crear_tab(titulo):
+    tab = ttk.Frame(notebook, style="TNotebook.Tab")
+    notebook.add(tab, text=titulo)
+    hola = 5
+    
+    btn_listar = tk.Button(tab, text="Listar", bg="#3e3e3e", fg="white", command=listar)
+    btn_listar.pack(pady = hola)
+
+    btn_crear = tk.Button(tab, text="Crear", bg="#3e3e3e", fg="white", command=crear)
+    btn_crear.pack(pady=hola)
+
+    btn_modificar = tk.Button(tab, text="Modificar", bg="#3e3e3e", fg="white", command=modificar)
+    btn_modificar.pack(pady=hola)
+
+    btn_borrar = tk.Button(tab, text="Borrar", bg="#3e3e3e", fg="white", command=borrar)
+    btn_borrar.pack(pady=hola)
+
+    btn_ddl = tk.Button(tab, text="Mostrar DDL", bg="#3e3e3e", fg="white", command=mostrar_ddl)
+    btn_ddl.pack(pady=hola)
+
+def SetupConection(user,password,database):
+    try:
+        connection = psycopg2.connect(
+        host=host,
+        database=database,
+        user=user,
+        password=password,
+        options="-c client_encoding=utf8"
+    )
+        print("Conexión exitosa")
+        
+    except Exception as e:
+        print("No soca: ", e)
+
+#----------------- Main -----------------
 root = tk.Tk()
 root.title("DB Connector")
 root.configure(bg="#1e1e1e")
@@ -25,6 +65,7 @@ x_ventana = root.winfo_screenwidth() // 2 - ancho_ventana // 2
 y_ventana = root.winfo_screenheight() // 2 - alto_ventana // 2
 posicion = str(ancho_ventana) + "x" + str(alto_ventana) + "+" + str(x_ventana) + "+" + str(y_ventana)
 root.geometry(posicion)
+
 
 style = ttk.Style()
 style.theme_use("clam")
@@ -55,26 +96,6 @@ btn_borrar.pack(pady=2)
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-def crear_tab(titulo):
-    tab = ttk.Frame(notebook, style="TNotebook.Tab")
-    notebook.add(tab, text=titulo)
-    hola = 5
-    
-    btn_listar = tk.Button(tab, text="Listar", bg="#3e3e3e", fg="white", command=listar)
-    btn_listar.pack(pady = hola)
-
-    btn_crear = tk.Button(tab, text="Crear", bg="#3e3e3e", fg="white", command=crear)
-    btn_crear.pack(pady=hola)
-
-    btn_modificar = tk.Button(tab, text="Modificar", bg="#3e3e3e", fg="white", command=modificar)
-    btn_modificar.pack(pady=hola)
-
-    btn_borrar = tk.Button(tab, text="Borrar", bg="#3e3e3e", fg="white", command=borrar)
-    btn_borrar.pack(pady=hola)
-
-    btn_ddl = tk.Button(tab, text="Mostrar DDL", bg="#3e3e3e", fg="white", command=mostrar_ddl)
-    btn_ddl.pack(pady=hola)
-
 titulos = ["Tablas", "Indices", "Procedimientos Almacenados", "Trigers", "Vistas", "Checks"]
 for titulo in titulos:
     crear_tab(titulo)
@@ -83,5 +104,10 @@ tk.Label(root, text="Resultado", bg="#1e1e1e", fg="white").pack(anchor=tk.W, pad
 
 resultado_text = tk.Text(root, height=10, bg="#1e1e1e", fg="white", insertbackground="white")
 resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
+
+usuario = simpledialog.askstring("Usuario", "Ingrese su usuario:")
+contrasena = simpledialog.askstring("Contraseña", "Ingrese su contraseña:", show='*')
+SetupConection(usuario,contrasena,"postgres")
+
 
 root.mainloop()
