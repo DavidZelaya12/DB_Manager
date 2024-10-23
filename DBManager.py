@@ -9,8 +9,11 @@ connection = None
 def listar():
     resultado_text.insert(tk.END, "Listando datos...\n")
 
-def crear():
-    resultado_text.insert(tk.END, "Creando registro...\n")
+def CrearUsuario():
+    nombre = simpledialog.askstring("Nombre de usuario", "Ingrese el nombre de usuario:")
+    contrasena = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
+    cursor.execute("CREATE USER "+nombre+" WITH PASSWORD '"+contrasena+"';")
+    lista.insert(tk.END, nombre)    
 
 def modificar():
     resultado_text.insert(tk.END, "Modificando registro...\n")
@@ -21,11 +24,10 @@ def borrar():
 def mostrar_ddl():
     resultado_text.insert(tk.END, "Mostrando DDL...\n")
 
-def mostrar_conexiones(lista,cursor):
+def mostrar_conexiones(lista):
     cursor.execute("SELECT usename FROM pg_user;")
     for registro in cursor:
         lista.insert(tk.END, registro[0])
-    cursor.close()
     
 
 def crear_tab(titulo):
@@ -36,7 +38,7 @@ def crear_tab(titulo):
     btn_listar = tk.Button(tab, text="Listar", bg="#3e3e3e", fg="white", command=listar)
     btn_listar.pack(pady = hola)
 
-    btn_crear = tk.Button(tab, text="Crear", bg="#3e3e3e", fg="white", command=crear)
+    btn_crear = tk.Button(tab, text="Crear", bg="#3e3e3e", fg="white", command=CrearUsuario)
     btn_crear.pack(pady=hola)
 
     btn_modificar = tk.Button(tab, text="Modificar", bg="#3e3e3e", fg="white", command=modificar)
@@ -90,7 +92,7 @@ tk.Label(frame_izquierdo, text="Conexiones", bg="#2e2e2e", fg="white").pack(pady
 lista = tk.Listbox(frame_izquierdo, bg="#1e1e1e", fg="white", selectbackground="#3e3e3e")
 lista.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
 
-btn_crear = tk.Button(frame_izquierdo, text="Crear", bg="#3e3e3e", fg="white", command=crear)
+btn_crear = tk.Button(frame_izquierdo, text="Crear", bg="#3e3e3e", fg="white", command=CrearUsuario)
 btn_crear.pack(pady=2)
 
 btn_modificar = tk.Button(frame_izquierdo, text="Modificar", bg="#3e3e3e", fg="white", command=modificar)
@@ -114,6 +116,6 @@ resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 usuario = simpledialog.askstring("Usuario", "Ingrese su usuario:")
 contrasena = simpledialog.askstring("Contraseña", "Ingrese su contraseña:", show='*')
 cursor = SetupConection(usuario,contrasena,"postgres")
-mostrar_conexiones(lista,cursor)
+mostrar_conexiones(lista)
 
 root.mainloop()
