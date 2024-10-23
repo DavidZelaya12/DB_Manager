@@ -21,6 +21,13 @@ def borrar():
 def mostrar_ddl():
     resultado_text.insert(tk.END, "Mostrando DDL...\n")
 
+def mostrar_conexiones(lista,cursor):
+    cursor.execute("SELECT usename FROM pg_user;")
+    for registro in cursor:
+        lista.insert(tk.END, registro[0])
+    cursor.close()
+    
+
 def crear_tab(titulo):
     tab = ttk.Frame(notebook, style="TNotebook.Tab")
     notebook.add(tab, text=titulo)
@@ -51,7 +58,8 @@ def SetupConection(user,password,database):
         options="-c client_encoding=utf8"
     )
         print("Conexión exitosa")
-        
+        return connection.cursor()
+         
     except Exception as e:
         print("No soca: ", e)
 
@@ -80,8 +88,6 @@ frame_izquierdo.border = 5
 tk.Label(frame_izquierdo, text="Conexiones", bg="#2e2e2e", fg="white").pack(pady=5)
 
 lista = tk.Listbox(frame_izquierdo, bg="#1e1e1e", fg="white", selectbackground="#3e3e3e")
-for i in range(1, 6):
-    lista.insert(tk.END, f"Item {i}")
 lista.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
 
 btn_crear = tk.Button(frame_izquierdo, text="Crear", bg="#3e3e3e", fg="white", command=crear)
@@ -107,7 +113,7 @@ resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 
 usuario = simpledialog.askstring("Usuario", "Ingrese su usuario:")
 contrasena = simpledialog.askstring("Contraseña", "Ingrese su contraseña:", show='*')
-SetupConection(usuario,contrasena,"postgres")
-
+cursor = SetupConection(usuario,contrasena,"postgres")
+mostrar_conexiones(lista,cursor)
 
 root.mainloop()
