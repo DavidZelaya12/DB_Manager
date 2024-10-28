@@ -8,11 +8,15 @@ connection = None
 
 # ----------------- Funciones -----------------
 
+def guardar_conexion(usuario, base_datos):
+    with open("conexiones.txt", "a") as file:
+        file.write(f"{usuario},{base_datos}\n")
+
 def CrearUsuario():
     usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
     contrasena = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
     base_datos = simpledialog.askstring("Base de Datos", "Ingrese el nombre de la base de datos:")
-    
+
     try:
         cursor.execute(f"CREATE USER {usuario} WITH PASSWORD '{contrasena}';")
         connection.commit()
@@ -21,9 +25,13 @@ def CrearUsuario():
         connection.commit()
         resultado_text.insert(tk.END, f"Usuario {usuario} conectado a la base de datos {base_datos}.\n")
         
+        # Guardar conexión en archivo
+        guardar_conexion(usuario, base_datos)
+
         mostrar_conexiones()
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: {e}\n")
+
 
 def modificarUsuario():
     usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
@@ -82,19 +90,29 @@ def mostrar_procedimientos():
 def mostrar_conexiones():
     lista.delete(0, tk.END)
     with open("conexiones.txt", "r") as file:
-        for usuario in file:
-            lista.insert(tk.END, usuario.strip())
-
+        for linea in file:
+            usuario, _ = linea.strip().split(",")
+            lista.insert(tk.END, usuario)
+            
 def setup_connection():
     global connection, cursor
-    user = lista.selection_get()
+    seleccion = lista.selection_get()
+
+    # Leer el usuario y la base de datos correspondientes del archivo
+    with open("conexiones.txt", "r") as file:
+        for linea in file:
+            usuario, bd = linea.strip().split(",")
+            if usuario == seleccion:
+                database = bd
+                break
+
     password = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
-    database = simpledialog.askstring("BD", "Ingrese la base de datos vinculada:")
+
     try:
         connection = psycopg2.connect(
             host=host,
             database=database,
-            user=user,
+            user=usuario,
             password=password,
             options="-c client_encoding=utf8"
         )
@@ -102,7 +120,6 @@ def setup_connection():
         print("Conexión exitosa")
     except Exception as e:
         print("Error de conexión:", e)
-
 # ----------------- Configuración de la Ventana -----------------
 
 root = tk.Tk()
@@ -167,8 +184,6 @@ resultado_text = tk.Text(root, height=10, bg="#1e1e1e", fg="white", insertbackgr
 resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 
 # ----------------- Conexión a la Base de Datos -----------------
-print( simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*'));
-
 mostrar_conexiones()
 
 root.mainloop()
