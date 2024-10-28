@@ -98,7 +98,6 @@ def setup_connection():
     global connection, cursor
     seleccion = lista.selection_get()
 
-    # Leer el usuario y la base de datos correspondientes del archivo
     with open("conexiones.txt", "r") as file:
         for linea in file:
             usuario, bd = linea.strip().split(",")
@@ -120,6 +119,7 @@ def setup_connection():
         print("Conexión exitosa")
     except Exception as e:
         print("Error de conexión:", e)
+
 # ----------------- Configuración de la Ventana -----------------
 
 root = tk.Tk()
@@ -157,13 +157,73 @@ btn_borrar.pack(pady=2)
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-# ----------------- Creación Manual de Tabs -----------------
 
+# ----------------- Creación Manual de Tabs -----------------
+def agregar_campo():
+    campo_frame = ttk.Frame(campos_frame)
+    campo_frame.pack(fill='x', pady=5)
+
+    ttk.Label(campo_frame, text="Nombre del campo:").grid(row=0, column=0, padx=5)
+    nombre_entry = ttk.Entry(campo_frame)
+    nombre_entry.grid(row=0, column=1, padx=5)
+
+    ttk.Label(campo_frame, text="Tipo de dato:").grid(row=0, column=2, padx=5)
+    tipo_combobox = ttk.Combobox(campo_frame, values=["INTEGER", "VARCHAR(255)", "TEXT", "BOOLEAN"])
+    tipo_combobox.grid(row=0, column=3, padx=5)
+    tipo_combobox.current(0)
+
+    campos.append((nombre_entry, tipo_combobox))
+
+def generar_ddl():
+    nombre_tabla = tabla_nombre_entry.get()
+    if not nombre_tabla:
+        resultado_text.insert(tk.END, "Error: El nombre de la tabla no puede estar vacío.\n")
+        return
+
+    if not campos:
+        resultado_text.insert(tk.END, "Error: Debe agregar al menos un campo.\n")
+        return
+
+    ddl = f"CREATE TABLE {nombre_tabla} (\n"
+    columnas = []
+
+    for nombre_entry, tipo_combobox in campos:
+        nombre_campo = nombre_entry.get()
+        tipo_dato = tipo_combobox.get()
+        if nombre_campo:
+            columnas.append(f"  {nombre_campo} {tipo_dato}")
+
+    ddl += ",\n".join(columnas) + "\n);"
+
+    resultado_text.delete(1.0, tk.END)  
+    resultado_text.insert(tk.END, ddl)
+
+
+def crear_tabla():
+    print("Crear tabla con los datos ingresados.")
+
+#Tab 1
 tab1 = ttk.Frame(notebook)
 notebook.add(tab1, text="Tablas")
-tk.Button(tab1, text="Listar Tablas", command=listar_tablas).pack(pady=10)
-tk.Button(tab1, text="Crear Tabla", command=crear_tabla).pack(pady=10)
-tk.Button(tab1, text="Eliminar Tabla").pack(pady=10)
+
+campos = []
+
+crear_tabla_frame = ttk.Frame(tab1)
+crear_tabla_frame.pack(pady=10, fill='x')
+
+ttk.Label(crear_tabla_frame, text="Nombre de la tabla:").pack(anchor='w', padx=10)
+tabla_nombre_entry = ttk.Entry(crear_tabla_frame)
+tabla_nombre_entry.pack(padx=10, fill='x')
+
+campos_frame = ttk.Frame(crear_tabla_frame)
+campos_frame.pack(pady=10, fill='x')
+
+ttk.Button(crear_tabla_frame, text="Agregar Campo", command=agregar_campo).pack(pady=5)
+ttk.Button(crear_tabla_frame, text="Crear Tabla", command=crear_tabla).pack(pady=5)
+ttk.Button(crear_tabla_frame, text="Listar tablas", command=listar_tablas).pack(pady=5)
+ttk.Button(crear_tabla_frame, text="Generar DDL", command=generar_ddl).pack(pady=5)
+
+
 
 tab2 = ttk.Frame(notebook)
 notebook.add(tab2, text="Vistas")
