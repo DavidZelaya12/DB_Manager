@@ -53,6 +53,7 @@ def listar_tablas():
         resultado_text.insert(tk.END, registro[0] + "\n")
 
 def crear_tabla():
+    resultado_text.delete(1.0, tk.END)
     try:
         nombre = simpledialog.askstring("Nombre de la tabla", "Ingrese el nombre de la tabla:")
         cursor.execute(f"CREATE TABLE {nombre} (id serial PRIMARY KEY, name VARCHAR(50));")
@@ -159,20 +160,88 @@ notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
 
 # ----------------- Creación Manual de Tabs -----------------
-def agregar_campo():
+def cargar_tabla():
+    resultado_text.delete(1.0, tk.END)
+    tabla = tabla_nombre_entry.get()
+    if not tabla:
+        resultado_text.insert(tk.END, "Error: Debe ingresar el nombre de la tabla a cargar.\n")
+        return
+
+    conn = connection
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+        # Obtener la estructura de la tabla
+        query = f"""
+            SELECT column_name, data_type, 
+                   CASE 
+                       WHEN column_name = ANY(ARRAY(
+                           SELECT a.attname 
+                           FROM pg_index i 
+                           JOIN pg_attribute a ON a.attrelid = i.indrelid 
+                           AND a.attnum = ANY(i.indkey) 
+                           WHERE i.indrelid = '{tabla}'::regclass 
+                           AND i.indisprimary)) 
+                       THEN 'Primaria'
+                       ELSE 'Ninguna'
+                   END AS restriccion
+            FROM information_schema.columns
+            WHERE table_name = %s;
+        """
+        cursor.execute(query, (tabla,))
+        resultado = cursor.fetchall()
+
+        if not resultado:
+            resultado_text.insert(tk.END, f"No se encontró la tabla '{tabla}'.\n")
+            return
+
+        # Limpiar los campos actuales
+        for widget in campos_frame.winfo_children():
+            widget.destroy()
+        campos.clear()
+
+        # Cargar los campos en el UI
+        for nombre, tipo, restriccion in resultado:
+            tipo = tipo.upper()  # Normalizar tipo de dato
+            agregar_campo(nombre, tipo, restriccion)
+
+        resultado_text.insert(tk.END, f"Tabla '{tabla}' cargada correctamente.\n")
+
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error al cargar la tabla: {e}\n")
+
+
+def agregar_campo(nombre="", tipo="INTEGER", restriccion="Ninguna"):
     campo_frame = ttk.Frame(campos_frame)
     campo_frame.pack(fill='x', pady=5)
 
     ttk.Label(campo_frame, text="Nombre del campo:").grid(row=0, column=0, padx=5)
     nombre_entry = ttk.Entry(campo_frame)
     nombre_entry.grid(row=0, column=1, padx=5)
+    nombre_entry.insert(0, nombre)
 
     ttk.Label(campo_frame, text="Tipo de dato:").grid(row=0, column=2, padx=5)
     tipo_combobox = ttk.Combobox(campo_frame, values=["INTEGER", "VARCHAR(255)", "TEXT", "BOOLEAN"])
     tipo_combobox.grid(row=0, column=3, padx=5)
-    tipo_combobox.current(0)
+    tipo_combobox.set(tipo)
 
-    campos.append((nombre_entry, tipo_combobox))
+    ttk.Label(campo_frame, text="Restricción:").grid(row=0, column=4, padx=5)
+    restriccion_combobox = ttk.Combobox(
+        campo_frame, values=["Ninguna", "Primaria", "Índice", "Foránea"]
+    )
+    restriccion_combobox.grid(row=0, column=5, padx=5)
+    restriccion_combobox.set(restriccion)
+
+    eliminar_btn = ttk.Button(campo_frame, text="Eliminar", command=lambda: eliminar_campo(campo_frame))
+    eliminar_btn.grid(row=0, column=6, padx=5)
+
+    campos.append((nombre_entry, tipo_combobox, restriccion_combobox))
+
+def eliminar_campo(campo_frame):
+    campo_frame.destroy()
+    campos[:] = [c for c in campos if c[0].winfo_exists()]
 
 def generar_ddl():
     nombre_tabla = tabla_nombre_entry.get()
@@ -186,23 +255,68 @@ def generar_ddl():
 
     ddl = f"CREATE TABLE {nombre_tabla} (\n"
     columnas = []
+    primarias = []
 
-    for nombre_entry, tipo_combobox in campos:
+    for nombre_entry, tipo_combobox, restriccion_combobox in campos:
         nombre_campo = nombre_entry.get()
         tipo_dato = tipo_combobox.get()
+        restriccion = restriccion_combobox.get()
+
         if nombre_campo:
             columnas.append(f"  {nombre_campo} {tipo_dato}")
+            if restriccion == "Primaria":
+                primarias.append(nombre_campo)
+
+    if primarias:
+        columnas.append(f"  PRIMARY KEY ({', '.join(primarias)})")
 
     ddl += ",\n".join(columnas) + "\n);"
 
-    resultado_text.delete(1.0, tk.END)  
+    resultado_text.delete(1.0, tk.END)
     resultado_text.insert(tk.END, ddl)
 
-
 def crear_tabla():
-    print("Crear tabla con los datos ingresados.")
+    generar_ddl()
+    Query = resultado_text.get(1.0, tk.END)
+    cursor.execute(Query)
+    connection.commit()
+    resultado_text.insert(tk.END, "\nTabla creada exitosamente.\n")
+    #reiniciar frame
+    tabla_nombre_entry.delete(0, tk.END)
+    for campo in campos:
+        campo[0].delete(0, tk.END)
 
-#Tab 1
+def EliminarTabla():
+    resultado_text.delete(1.0, tk.END)
+    nombreTabla = simpledialog.askstring("Nombre de la tabla", "Ingrese el nombre de la tabla a eliminar:")
+    borrar_tabla(nombreTabla)
+    resultado_text.insert(tk.END, f"Tabla {nombreTabla} eliminada.\n")
+    
+
+
+
+
+def borrar_tabla(nombreTabla):
+    try:
+        cursor.execute(f"DROP TABLE {nombreTabla};")
+        connection.commit()
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error durante la transaccion:0 {e}\n")
+
+def modificar_tabla():
+    resultado_text.delete(1.0, tk.END)
+    nombreTablaVieja = tabla_nombre_entry.get()
+    generar_ddl()
+    ddl = resultado_text.get(1.0, tk.END)
+    try:
+        borrar_tabla(nombreTablaVieja)
+        cursor.execute(ddl)
+        connection.commit()
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error: al modificar la tabla {e}\n")
+
+
+#Tab 1 tablas
 tab1 = ttk.Frame(notebook)
 notebook.add(tab1, text="Tablas")
 
@@ -218,13 +332,21 @@ tabla_nombre_entry.pack(padx=10, fill='x')
 campos_frame = ttk.Frame(crear_tabla_frame)
 campos_frame.pack(pady=10, fill='x')
 
-ttk.Button(crear_tabla_frame, text="Agregar Campo", command=agregar_campo).pack(pady=5)
-ttk.Button(crear_tabla_frame, text="Crear Tabla", command=crear_tabla).pack(pady=5)
-ttk.Button(crear_tabla_frame, text="Listar tablas", command=listar_tablas).pack(pady=5)
-ttk.Button(crear_tabla_frame, text="Generar DDL", command=generar_ddl).pack(pady=5)
+# Crear un frame interno para los botones
+botones_frame = ttk.Frame(crear_tabla_frame)
+botones_frame.pack(pady=10)
+
+# Distribuir los botones en una sola fila usando grid
+ttk.Button(botones_frame, text="Crear tabla", command=crear_tabla).grid(row=0, column=0, padx=5, pady=5)
+ttk.Button(botones_frame, text="Agregar Campo", command=agregar_campo).grid(row=0, column=1, padx=5, pady=5)
+ttk.Button(botones_frame, text="Generar DDL", command=generar_ddl).grid(row=0, column=2, padx=5, pady=5)
+ttk.Button(botones_frame, text="Listar tablas", command=listar_tablas).grid(row=0, column=3, padx=5, pady=5)
+ttk.Button(botones_frame, text="Cargar Tabla", command=cargar_tabla).grid(row=0, column=4, padx=5, pady=5)
+ttk.Button(botones_frame, text="Modificar Tabla", command=modificar_tabla).grid(row=0, column=5, padx=5, pady=5)
+ttk.Button(botones_frame, text="Eliminar tabla", command=EliminarTabla).grid(row=0, column=6, padx=5, pady=5)
 
 
-
+#Tab 2 vistas
 tab2 = ttk.Frame(notebook)
 notebook.add(tab2, text="Vistas")
 tk.Button(tab2, text="Mostrar Vistas", command=mostrar_vistas).pack(pady=10)
