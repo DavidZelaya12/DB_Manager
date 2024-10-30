@@ -24,8 +24,7 @@ def CrearUsuario():
         cursor.execute(f"GRANT ALL PRIVILEGES ON DATABASE {base_datos} TO {usuario};")
         connection.commit()
         resultado_text.insert(tk.END, f"Usuario {usuario} conectado a la base de datos {base_datos}.\n")
-        
-        # Guardar conexión en archivo
+
         guardar_conexion(usuario, base_datos)
 
         mostrar_conexiones()
@@ -160,6 +159,7 @@ notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
 
 # ----------------- Creación Manual de Tabs -----------------
+#Tab 1 tablas
 def cargar_tabla():
     resultado_text.delete(1.0, tk.END)
     tabla = tabla_nombre_entry.get()
@@ -173,7 +173,6 @@ def cargar_tabla():
 
     try:
         cursor = conn.cursor()
-        # Obtener la estructura de la tabla
         query = f"""
             SELECT column_name, data_type, 
                    CASE 
@@ -197,14 +196,12 @@ def cargar_tabla():
             resultado_text.insert(tk.END, f"No se encontró la tabla '{tabla}'.\n")
             return
 
-        # Limpiar los campos actuales
         for widget in campos_frame.winfo_children():
             widget.destroy()
         campos.clear()
 
-        # Cargar los campos en el UI
         for nombre, tipo, restriccion in resultado:
-            tipo = tipo.upper()  # Normalizar tipo de dato
+            tipo = tipo.upper()  
             agregar_campo(nombre, tipo, restriccion)
 
         resultado_text.insert(tk.END, f"Tabla '{tabla}' cargada correctamente.\n")
@@ -294,8 +291,6 @@ def EliminarTabla():
     
 
 
-
-
 def borrar_tabla(nombreTabla):
     try:
         cursor.execute(f"DROP TABLE {nombreTabla};")
@@ -316,7 +311,6 @@ def modificar_tabla():
         resultado_text.insert(tk.END, f"Error: al modificar la tabla {e}\n")
 
 
-#Tab 1 tablas
 tab1 = ttk.Frame(notebook)
 notebook.add(tab1, text="Tablas")
 
@@ -332,11 +326,9 @@ tabla_nombre_entry.pack(padx=10, fill='x')
 campos_frame = ttk.Frame(crear_tabla_frame)
 campos_frame.pack(pady=10, fill='x')
 
-# Crear un frame interno para los botones
 botones_frame = ttk.Frame(crear_tabla_frame)
 botones_frame.pack(pady=10)
 
-# Distribuir los botones en una sola fila usando grid
 ttk.Button(botones_frame, text="Crear tabla", command=crear_tabla).grid(row=0, column=0, padx=5, pady=5)
 ttk.Button(botones_frame, text="Agregar Campo", command=agregar_campo).grid(row=0, column=1, padx=5, pady=5)
 ttk.Button(botones_frame, text="Generar DDL", command=generar_ddl).grid(row=0, column=2, padx=5, pady=5)
@@ -346,18 +338,100 @@ ttk.Button(botones_frame, text="Modificar Tabla", command=modificar_tabla).grid(
 ttk.Button(botones_frame, text="Eliminar tabla", command=EliminarTabla).grid(row=0, column=6, padx=5, pady=5)
 
 
+def crear_vista():
+    resultado_text.delete(1.0, tk.END)
+    nombre_vista = entrada_nombre.get()
+    consulta_vista = entrada_consulta.get("1.0", tk.END)
+    try:
+        cursor = connection.cursor()
+        cursor.execute(f"CREATE VIEW OR REPLACE {nombre_vista} AS {consulta_vista}")
+        connection.commit()
+        resultado.set(f"Vista '{nombre_vista}' creada exitosamente.")
+    except Exception as e:
+        resultado.set(f"Error: {str(e)}")
+
+def MostrarddlVistas():
+    resultado_text.delete(1.0, tk.END)
+    nombre_vista = entrada_nombre.get()
+    consulta_vista = entrada_consulta.get("1.0", tk.END)
+    resultado_text.insert(tk.END, f"CREATE OR REPLACE {nombre_vista} AS {consulta_vista}")
+
+def ExisteVista(nombreVista):
+    cursor.execute(f"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '{nombreVista}');")
+    return cursor.fetchone()[0] == True
+
+
+def cargar_vista():
+    resultado_text.delete(1.0, tk.END)
+    entrada_consulta.delete("1.0", tk.END)
+    NombreVista = simpledialog.askstring("Nombre de la vista", "Ingrese el nombre de la vista a cargar:")
+    if not NombreVista:
+        resultado_text.insert(tk.END, "Error: Debe ingresar el nombre de la vista a cargar.\n")
+        return
+    entrada_nombre.delete(0, tk.END)
+    entrada_nombre.insert(tk.END, NombreVista)
+    if ExisteVista(NombreVista):
+        try:
+            cursor.execute(f"""
+                SELECT pg_get_viewdef('{NombreVista}', true);
+            """)
+            vista_sql = cursor.fetchone()[0]
+            ddl = f"{vista_sql};"
+            entrada_consulta.insert(tk.END, ddl)
+            resultado_text.insert(tk.END, f"Vista '{NombreVista}' cargada exitosamente.\n")
+        except Exception as e:
+            resultado_text.insert(tk.END, f"Error: {e}\n")
+    else:
+        resultado_text.insert(tk.END, f"Error: La vista '{NombreVista}' no existe.\n")
+
+def EliminarVista():
+    resultado_text.delete(1.0, tk.END)
+    try:
+        resultado_text.delete(1.0, tk.END)
+        nombreVista = simpledialog.askstring("Nombre de la vista", "Ingrese el nombre de la vista a eliminar:")
+        cursor.execute(f"DROP VIEW {nombreVista};")
+        resultado_text.insert(tk.END, f"Vista {nombreVista} eliminada.\n")
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error: {e}\n")
+
 #Tab 2 vistas
 tab2 = ttk.Frame(notebook)
 notebook.add(tab2, text="Vistas")
 tk.Button(tab2, text="Mostrar Vistas", command=mostrar_vistas).pack(pady=10)
+tk.Button(tab2, text="Mostrar DDL", command=MostrarddlVistas).pack(pady=10)
+tk.Button(tab2, text="Cargar Vista", command=cargar_vista).pack(pady=10)
+tk.Button(tab2, text="Eliminar Vista", command=EliminarVista).pack(pady=10)
 
+tk.Label(tab2, text="Nombre de la Vista:").pack(pady=5)
+entrada_nombre = tk.Entry(tab2, width=40)
+entrada_nombre.pack(pady=5)
+
+tk.Label(tab2, text="Consulta SQL:").pack(pady=5)
+entrada_consulta = tk.Text(tab2, width=60, height=10)
+entrada_consulta.pack(pady=5)
+
+tk.Button(tab2, text="Crear Vista", command=crear_vista).pack(pady=10)
+
+resultado = tk.StringVar()
+tk.Label(tab2, textvariable=resultado, fg="green").pack(pady=5)
+
+
+
+#Tab 3 procedimientos
 tab3 = ttk.Frame(notebook)
 notebook.add(tab3, text="Procedimientos")
 tk.Button(tab3, text="Mostrar Procedimientos", command=mostrar_procedimientos).pack(pady=10)
 
+#Tab 4 triggers
 tab4 = ttk.Frame(notebook)
-notebook.add(tab4, text="Usuarios")
+notebook.add(tab4, text="Triggers")
 tk.Button(tab4, text="Modificar Usuario", command=modificar_usuario).pack(pady=10)
+
+#tab 5 checks
+tab5 = ttk.Frame(notebook)
+notebook.add(tab5, text="Checks")
+tk.Button(tab5, text="Listar checks", command=crear_tabla).pack(pady=10)
+
 
 # ----------------- Resultado -----------------
 
