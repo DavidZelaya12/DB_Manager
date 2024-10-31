@@ -51,6 +51,7 @@ def listar_tablas():
     for registro in cursor:
         resultado_text.insert(tk.END, registro[0] + "\n")
 
+
 def crear_tabla():
     resultado_text.delete(1.0, tk.END)
     try:
@@ -70,7 +71,6 @@ def modificar_usuario():
         resultado_text.insert(tk.END, f"Usuario {usuario} modificado.\n")
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: {e}\n")
-
 
 def mostrar_conexiones():
     lista.delete(0, tk.END)
@@ -101,9 +101,9 @@ def setup_connection():
             options="-c client_encoding=utf8"
         )
         cursor = connection.cursor()
-        print("Conexión exitosa")
+        resultado_text.insert(tk.END, "Conexion establecida\n")
     except Exception as e:
-        print("Error de conexión:", e)
+        resultado_text.insert(tk.END, "Error de conexion\n")
 
 # ----------------- Configuración de la Ventana -----------------
 
@@ -141,7 +141,6 @@ btn_borrar.pack(pady=2)
 
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
 
 # ----------------- Creación Manual de Tabs -----------------
 #Tab 1 tablas
@@ -207,13 +206,16 @@ def agregar_campo(nombre="", tipo="INTEGER", restriccion="Ninguna"):
     tipo_combobox = ttk.Combobox(campo_frame, values=["INTEGER", "VARCHAR(255)", "TEXT", "BOOLEAN"])
     tipo_combobox.grid(row=0, column=3, padx=5)
     tipo_combobox.set(tipo)
+    tipo_combobox.config(state= "readonly")
 
     ttk.Label(campo_frame, text="Restricción:").grid(row=0, column=4, padx=5)
     restriccion_combobox = ttk.Combobox(
         campo_frame, values=["Ninguna", "Primaria", "Índice", "Foránea"]
     )
+
     restriccion_combobox.grid(row=0, column=5, padx=5)
     restriccion_combobox.set(restriccion)
+    restriccion_combobox.config(state= "readonly")
 
     eliminar_btn = ttk.Button(campo_frame, text="Eliminar", command=lambda: eliminar_campo(campo_frame))
     eliminar_btn.grid(row=0, column=6, padx=5)
@@ -411,10 +413,7 @@ tk.Button(tab2, text="Crear Vista", command=crear_vista).pack(pady=10)
 resultado = tk.StringVar()
 tk.Label(tab2, textvariable=resultado, fg="green").pack(pady=5)
 
-
-
 #Tab 3 procedimientos
-
 def crearProcedimiento():
     resultado_text.delete(1.0, tk.END)
     nombreProcedimiento =entrada_nombre_procedimiento.get()
@@ -497,18 +496,84 @@ entrada_consulta_procedimiento.pack(pady=5)
 
 tk.Button(tab3, text="Crear Procedimiento", command=crearProcedimiento).pack(pady=10)
 
-
-
 #Tab 4 triggers
+
+def CrearTrigger():
+    resultado_text.delete(1.0, tk.END)
+    nombre_trigger = entrada_nombre_triggers.get()
+    consulta_trigger = "CREATE TRIGGER " + nombre_trigger + " " + entrada_consulta_triggers.get("1.0", tk.END).strip()
+
+    try:
+        cursor.execute(f"""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.triggers 
+                           WHERE trigger_name = '{nombre_trigger}') THEN
+                    EXECUTE 'DROP TRIGGER {nombre_trigger} ON public.empleados';
+                END IF;
+
+                EXECUTE $create_trigger${consulta_trigger}$create_trigger$;
+            END $$;
+        """)
+        connection.commit()
+        resultado_text.insert(tk.END, f"Trigger '{nombre_trigger}' creado o reemplazado.\n")
+    except Exception as e:
+        connection.rollback()
+        resultado_text.insert(tk.END, f"Error: {e}\n")
+def ListarTriggers():
+    resultado_text.delete(1.0, tk.END)
+    cursor.execute("SELECT trigger_name FROM information_schema.triggers WHERE trigger_schema = 'public';")
+    for registro in cursor:
+        resultado_text.insert(tk.END, registro[0] + "\n")
+
+def MostrarDDLTrigger():
+    resultado_text.delete(1.0, tk.END)
+    nombre_trigger = entrada_nombre_triggers.get()
+    consulta_trigger = entrada_consulta_triggers.get("1.0", tk.END)
+    resultado_text.insert(tk.END, f"CREATE OR REPLACE TRIGGER {nombre_trigger} {consulta_trigger}")
+
+def CargarTrigger():
+    resultado_text.delete(1.0, tk.END)
+    entrada_consulta_triggers.delete("1.0", tk.END)
+    NombreTrigger = simpledialog.askstring("Nombre del trigger", "Ingrese el nombre del trigger a cargar:")
+    entrada_nombre_triggers.delete(0, tk.END)
+    entrada_nombre_triggers.insert(tk.END, NombreTrigger)
+    condicion = True
+    if condicion: 
+        try:
+            cursor.execute(f"""
+                SELECT pg_get_triggerdef(oid)
+                FROM pg_trigger
+                WHERE tgname = '{NombreTrigger}';
+            """)
+            trigger_sql = cursor.fetchone()
+            if trigger_sql:
+                ddl = f"{trigger_sql[0]};"
+                entrada_consulta_triggers.insert(tk.END, ddl)
+                resultado_text.insert(tk.END, f"Trigger '{NombreTrigger}' cargado exitosamente.\n")
+            else:
+                resultado_text.insert(tk.END, f"No se encontró el trigger '{NombreTrigger}'.\n")
+        except Exception as e:
+            resultado_text.insert(tk.END, f"Error: {e}\n")
+
+
+
 tab4 = ttk.Frame(notebook)
 notebook.add(tab4, text="Triggers")
-tk.Button(tab4, text="Modificar Usuario", command=modificar_usuario).pack(pady=10)
+tk.Button(tab4, text="Listar triggers", command=ListarTriggers).pack(pady=10)
+tk.Button(tab4, text="Mostrar DDL", command=MostrarDDLTrigger).pack(pady=10)
+tk.Button(tab4, text="Cargar Trigger", command=CargarTrigger).pack(pady=10)
 
-#tab 5 checks
-tab5 = ttk.Frame(notebook)
-notebook.add(tab5, text="Checks")
-tk.Button(tab5, text="Listar checks", command=crear_tabla).pack(pady=10)
+tk.Label(tab4, text="Nombre del trigger:").pack(pady=5)
+entrada_nombre_triggers = tk.Entry(tab4, width=40)
+entrada_nombre_triggers.pack(pady=5)
 
+tk.Label(tab4, text="Consulta SQL:").pack(pady=5)
+entrada_consulta_triggers = tk.Text(tab4, width=60, height=10)
+entrada_consulta_triggers.pack(pady=5)
+
+
+tk.Button(tab4, text="Crear Trigger",command=CrearTrigger).pack(pady=10)
 
 # ----------------- Resultado -----------------
 
