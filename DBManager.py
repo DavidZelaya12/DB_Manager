@@ -71,21 +71,6 @@ def modificar_usuario():
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: {e}\n")
 
-def mostrar_vistas():
-    resultado_text.delete(1.0, tk.END)
-    cursor.execute("SELECT viewname FROM pg_views WHERE schemaname = 'public';")
-    for vista in cursor:
-        resultado_text.insert(tk.END, vista[0] + "\n")
-
-def mostrar_procedimientos():
-    resultado_text.delete(1.0, tk.END)
-    cursor.execute("""
-        SELECT proname FROM pg_proc p
-        JOIN pg_namespace n ON p.pronamespace = n.oid
-        WHERE n.nspname = 'public';
-    """)
-    for proc in cursor:
-        resultado_text.insert(tk.END, proc[0] + "\n")
 
 def mostrar_conexiones():
     lista.delete(0, tk.END)
@@ -125,7 +110,7 @@ def setup_connection():
 root = tk.Tk()
 root.title("DB Connector")
 root.configure(bg="#1e1e1e")
-root.geometry("1024x600")
+root.geometry("1024x800")
 
 
 style = ttk.Style()
@@ -208,7 +193,6 @@ def cargar_tabla():
 
     except Exception as e:
         resultado_text.insert(tk.END, f"Error al cargar la tabla: {e}\n")
-
 
 def agregar_campo(nombre="", tipo="INTEGER", restriccion="Ninguna"):
     campo_frame = ttk.Frame(campos_frame)
@@ -337,39 +321,46 @@ ttk.Button(botones_frame, text="Cargar Tabla", command=cargar_tabla).grid(row=0,
 ttk.Button(botones_frame, text="Modificar Tabla", command=modificar_tabla).grid(row=0, column=5, padx=5, pady=5)
 ttk.Button(botones_frame, text="Eliminar tabla", command=EliminarTabla).grid(row=0, column=6, padx=5, pady=5)
 
+#Tab 2 vistas
+
+def mostrar_vistas():
+    resultado_text.delete(1.0, tk.END)
+    cursor.execute("SELECT viewname FROM pg_views WHERE schemaname = 'public';")
+    for registro in cursor:
+        resultado_text.insert(tk.END, registro[0] + "\n")
+
 
 def crear_vista():
     resultado_text.delete(1.0, tk.END)
-    nombre_vista = entrada_nombre.get()
-    consulta_vista = entrada_consulta.get("1.0", tk.END)
+    nombre_vista = entrada_nombre_vistas.get()
+    consulta_vista = entrada_consulta_vistas.get("1.0", tk.END)
     try:
         cursor = connection.cursor()
-        cursor.execute(f"CREATE VIEW OR REPLACE {nombre_vista} AS {consulta_vista}")
+        cursor.execute(f"CREATE OR REPLACE VIEW {nombre_vista} AS {consulta_vista}")
         connection.commit()
-        resultado.set(f"Vista '{nombre_vista}' creada exitosamente.")
+        resultado_text.insert(tk.END, f"Vista {nombre_vista} creada exitosamente.\n")
     except Exception as e:
-        resultado.set(f"Error: {str(e)}")
+        resultado_text.insert(tk.END, f"Error: {e}\n")
 
 def MostrarddlVistas():
     resultado_text.delete(1.0, tk.END)
-    nombre_vista = entrada_nombre.get()
-    consulta_vista = entrada_consulta.get("1.0", tk.END)
-    resultado_text.insert(tk.END, f"CREATE OR REPLACE {nombre_vista} AS {consulta_vista}")
+    nombre_vista = entrada_nombre_vistas.get()
+    consulta_vista = entrada_consulta_vistas.get("1.0", tk.END)
+    resultado_text.insert(tk.END, f"CREATE VIEW OR REPLACE {nombre_vista} AS {consulta_vista}")
 
 def ExisteVista(nombreVista):
     cursor.execute(f"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '{nombreVista}');")
     return cursor.fetchone()[0] == True
 
-
 def cargar_vista():
     resultado_text.delete(1.0, tk.END)
-    entrada_consulta.delete("1.0", tk.END)
+    entrada_consulta_vistas.delete("1.0", tk.END)
     NombreVista = simpledialog.askstring("Nombre de la vista", "Ingrese el nombre de la vista a cargar:")
     if not NombreVista:
         resultado_text.insert(tk.END, "Error: Debe ingresar el nombre de la vista a cargar.\n")
         return
-    entrada_nombre.delete(0, tk.END)
-    entrada_nombre.insert(tk.END, NombreVista)
+    entrada_nombre_vistas.delete(0, tk.END)
+    entrada_nombre_vistas.insert(tk.END, NombreVista)
     if ExisteVista(NombreVista):
         try:
             cursor.execute(f"""
@@ -377,7 +368,7 @@ def cargar_vista():
             """)
             vista_sql = cursor.fetchone()[0]
             ddl = f"{vista_sql};"
-            entrada_consulta.insert(tk.END, ddl)
+            entrada_consulta_vistas.insert(tk.END, ddl)
             resultado_text.insert(tk.END, f"Vista '{NombreVista}' cargada exitosamente.\n")
         except Exception as e:
             resultado_text.insert(tk.END, f"Error: {e}\n")
@@ -386,15 +377,20 @@ def cargar_vista():
 
 def EliminarVista():
     resultado_text.delete(1.0, tk.END)
+    
     try:
         resultado_text.delete(1.0, tk.END)
         nombreVista = simpledialog.askstring("Nombre de la vista", "Ingrese el nombre de la vista a eliminar:")
+        if not ExisteVista(nombreVista):
+            resultado_text.insert(tk.END, "Error: vista no valida.\n")
+            
+            return
+        
         cursor.execute(f"DROP VIEW {nombreVista};")
         resultado_text.insert(tk.END, f"Vista {nombreVista} eliminada.\n")
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: {e}\n")
 
-#Tab 2 vistas
 tab2 = ttk.Frame(notebook)
 notebook.add(tab2, text="Vistas")
 tk.Button(tab2, text="Mostrar Vistas", command=mostrar_vistas).pack(pady=10)
@@ -403,12 +399,12 @@ tk.Button(tab2, text="Cargar Vista", command=cargar_vista).pack(pady=10)
 tk.Button(tab2, text="Eliminar Vista", command=EliminarVista).pack(pady=10)
 
 tk.Label(tab2, text="Nombre de la Vista:").pack(pady=5)
-entrada_nombre = tk.Entry(tab2, width=40)
-entrada_nombre.pack(pady=5)
+entrada_nombre_vistas = tk.Entry(tab2, width=40)
+entrada_nombre_vistas.pack(pady=5)
 
 tk.Label(tab2, text="Consulta SQL:").pack(pady=5)
-entrada_consulta = tk.Text(tab2, width=60, height=10)
-entrada_consulta.pack(pady=5)
+entrada_consulta_vistas = tk.Text(tab2, width=60, height=10)
+entrada_consulta_vistas.pack(pady=5)
 
 tk.Button(tab2, text="Crear Vista", command=crear_vista).pack(pady=10)
 
@@ -418,9 +414,90 @@ tk.Label(tab2, textvariable=resultado, fg="green").pack(pady=5)
 
 
 #Tab 3 procedimientos
+
+def crearProcedimiento():
+    resultado_text.delete(1.0, tk.END)
+    nombreProcedimiento =entrada_nombre_procedimiento.get()
+    consultaProcedimiento = entrada_consulta_procedimiento.get("1.0", tk.END)
+    try:
+        cursor.execute(f"CREATE OR REPLACE FUNCTION {nombreProcedimiento}()  {consultaProcedimiento}")
+        connection.commit()
+        resultado_text.insert(tk.END, f"Procedimiento {nombreProcedimiento} creado.\n")
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error: {e}\n")
+
+def mostrar_procedimientos():
+    resultado_text.delete(1.0, tk.END)
+    cursor.execute("""
+        SELECT proname 
+        FROM pg_proc 
+        JOIN pg_namespace n ON pg_proc.pronamespace = n.oid
+        WHERE n.nspname = 'public';
+    """)
+    for registro in cursor:
+        resultado_text.insert(tk.END, registro[0] + "\n")
+
+def MostrarDDLProcedimientos():
+    resultado_text.delete(1.0, tk.END)
+    nombre_procedimiento = entrada_nombre_procedimiento.get()
+    consulta_procedimiento = entrada_consulta_procedimiento.get("1.0", tk.END)
+    resultado_text.insert(tk.END, f"CREATE OR REPLACE {nombre_procedimiento} AS {consulta_procedimiento}")
+    
+def ExisteProcedimiento(nombreProcedimiento):
+    cursor.execute(f"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '{nombreProcedimiento}');")
+    return cursor.fetchone()[0] == True
+
+def cargar_procedimiento():
+    resultado_text.delete(1.0, tk.END)
+    entrada_consulta_procedimiento.delete("1.0", tk.END)
+    NombreProcedimiento = simpledialog.askstring("Nombre del procedimiento", "Ingrese el nombre del procedimiento a cargar:")
+    entrada_nombre_procedimiento.delete(0, tk.END)
+    entrada_nombre_procedimiento.insert(tk.END, NombreProcedimiento)
+    if not ExisteProcedimiento(NombreProcedimiento): 
+        try:
+            cursor.execute(f"""
+                SELECT pg_get_functiondef(oid)
+                FROM pg_proc
+                WHERE proname = '{NombreProcedimiento}';
+            """)
+            procedimiento_sql = cursor.fetchone()
+            if procedimiento_sql:
+                ddl = f"{procedimiento_sql[0]};"
+                entrada_consulta_procedimiento.insert(tk.END, ddl)
+                resultado_text.insert(tk.END, f"Procedimiento '{NombreProcedimiento}' cargado exitosamente.\n")
+            else:
+                resultado_text.insert(tk.END, f"No se encontró el procedimiento '{NombreProcedimiento}'.\n")
+        except Exception as e:
+            resultado_text.insert(tk.END, f"Error: {e}\n")
+   
+def EliminarProcedimiento():
+    resultado_text.delete(1.0, tk.END)
+    try:
+        resultado_text.delete(1.0, tk.END)
+        nombreProcedimiento = simpledialog.askstring("Nombre del procedimiento", "Ingrese el nombre del procedimiento a eliminar:")
+        cursor.execute(f"DROP VIEW {nombreProcedimiento};") 
+        resultado_text.insert(tk.END, f"Procedimiento {nombreProcedimiento} eliminado.\n")
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error: {e}\n")
+
 tab3 = ttk.Frame(notebook)
 notebook.add(tab3, text="Procedimientos")
 tk.Button(tab3, text="Mostrar Procedimientos", command=mostrar_procedimientos).pack(pady=10)
+tk.Button(tab3, text="Mostrar DDL", command=MostrarDDLProcedimientos).pack(pady=10)
+tk.Button(tab3, text="Cargar Procedimiento", command=cargar_procedimiento).pack(pady=10)
+tk.Button(tab3, text="Eliminar Procedimiento", command=EliminarProcedimiento).pack(pady=10)
+
+tk.Label(tab3, text="Nombre del Procedimiento:").pack(pady=5)
+entrada_nombre_procedimiento = tk.Entry(tab3, width=40)
+entrada_nombre_procedimiento.pack(pady=5)
+
+tk.Label(tab3, text="Consulta SQL:").pack(pady=5)
+entrada_consulta_procedimiento = tk.Text(tab3, width=60, height=10)
+entrada_consulta_procedimiento.pack(pady=5)
+
+tk.Button(tab3, text="Crear Procedimiento", command=crearProcedimiento).pack(pady=10)
+
+
 
 #Tab 4 triggers
 tab4 = ttk.Frame(notebook)
@@ -436,7 +513,7 @@ tk.Button(tab5, text="Listar checks", command=crear_tabla).pack(pady=10)
 # ----------------- Resultado -----------------
 
 tk.Label(root, text="Resultado", bg="#1e1e1e", fg="white").pack(anchor=tk.W, padx=5)
-resultado_text = tk.Text(root, height=10, bg="#1e1e1e", fg="white", insertbackground="white")
+resultado_text = tk.Text(root, height=600, bg="#1e1e1e", fg="white", insertbackground="white")
 resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 
 # ----------------- Conexión a la Base de Datos -----------------
