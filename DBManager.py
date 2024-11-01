@@ -7,12 +7,12 @@ cursor = None
 connection = None
 
 # ----------------- Funciones -----------------
-
 def guardar_conexion(usuario, base_datos):
     with open("conexiones.txt", "a") as file:
         file.write(f"{usuario},{base_datos}\n")
 
 def CrearUsuario():
+    resultado_text.delete(1.0, tk.END)    
     usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
     contrasena = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
     base_datos = simpledialog.askstring("Base de Datos", "Ingrese el nombre de la base de datos:")
@@ -21,20 +21,21 @@ def CrearUsuario():
         cursor.execute(f"CREATE USER {usuario} WITH PASSWORD '{contrasena}';")
         connection.commit()
         resultado_text.insert(tk.END, f"Usuario {usuario} creado.\n")
-        cursor.execute(f"GRANT ALL PRIVILEGES ON DATABASE {base_datos} TO {usuario};")
-        connection.commit()
-        resultado_text.insert(tk.END, f"Usuario {usuario} conectado a la base de datos {base_datos}.\n")
-
         guardar_conexion(usuario, base_datos)
-
         mostrar_conexiones()
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: {e}\n")
 
 
 def modificarUsuario():
+    resultado_text.delete(1.0, tk.END)
     usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
     contrasena = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
+
+    if usuario == None or contrasena == None:
+        resultado_text.insert(tk.END,f"Error: Usuario o contrasena invalidos")
+        return
+
     try:
         cursor.execute(f"ALTER USER {usuario} WITH PASSWORD '{contrasena}';")
         connection.commit()
@@ -43,7 +44,29 @@ def modificarUsuario():
         resultado_text.insert(tk.END, f"Error: {e}\n")
 
 def borrarUsuario():
-    print("Borrar Usuario")
+    resultado_text.delete(1.0, tk.END)
+    usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
+    if usuario == None:
+        resultado_text.insert(tk.END,f"Error: Usuario invalido")
+        return
+
+    try:
+        cursor.execute(f"DROP USER {usuario};")
+        connection.commit()
+        resultado_text.insert(tk.END, f"Usuario {usuario} eliminado.\n")
+        EliminarUsuarioArchivo(usuario)
+        mostrar_conexiones()
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error: {e}\n")
+
+def EliminarUsuarioArchivo(nombreUsuario):
+    with open("conexiones.txt", "r") as file:
+        lineas = file.readlines()
+    with open("conexiones.txt", "w") as file:
+        for linea in lineas:
+            usuario, _ = linea.strip().split(",")
+            if usuario != nombreUsuario:
+                file.write(linea)
 
 def listar_tablas():
     resultado_text.delete(1.0, tk.END)
@@ -80,6 +103,7 @@ def mostrar_conexiones():
             lista.insert(tk.END, usuario)
             
 def setup_connection():
+    resultado_text.delete(1.0, tk.END)
     global connection, cursor
     seleccion = lista.selection_get()
 
@@ -193,7 +217,7 @@ def cargar_tabla():
     except Exception as e:
         resultado_text.insert(tk.END, f"Error al cargar la tabla: {e}\n")
 
-def agregar_campo(nombre="", tipo="INTEGER", restriccion="Ninguna"):
+def agregar_campo(nombre="", tipo="INTEGER", restriccion="Ninguna", check_expr=""):
     campo_frame = ttk.Frame(campos_frame)
     campo_frame.pack(fill='x', pady=5)
 
@@ -206,21 +230,25 @@ def agregar_campo(nombre="", tipo="INTEGER", restriccion="Ninguna"):
     tipo_combobox = ttk.Combobox(campo_frame, values=["INTEGER", "VARCHAR(255)", "TEXT", "BOOLEAN"])
     tipo_combobox.grid(row=0, column=3, padx=5)
     tipo_combobox.set(tipo)
-    tipo_combobox.config(state= "readonly")
+    tipo_combobox.config(state="readonly")
 
     ttk.Label(campo_frame, text="Restricción:").grid(row=0, column=4, padx=5)
     restriccion_combobox = ttk.Combobox(
         campo_frame, values=["Ninguna", "Primaria", "Índice", "Foránea"]
     )
-
     restriccion_combobox.grid(row=0, column=5, padx=5)
     restriccion_combobox.set(restriccion)
-    restriccion_combobox.config(state= "readonly")
+    restriccion_combobox.config(state="readonly")
+
+    ttk.Label(campo_frame, text="Expresión CHECK:").grid(row=0, column=6, padx=5)
+    check_entry = ttk.Entry(campo_frame)
+    check_entry.grid(row=0, column=7, padx=5)
+    check_entry.insert(0, check_expr)
 
     eliminar_btn = ttk.Button(campo_frame, text="Eliminar", command=lambda: eliminar_campo(campo_frame))
-    eliminar_btn.grid(row=0, column=6, padx=5)
+    eliminar_btn.grid(row=0, column=8, padx=5)
 
-    campos.append((nombre_entry, tipo_combobox, restriccion_combobox))
+    campos.append((nombre_entry, tipo_combobox, restriccion_combobox, check_entry))
 
 def eliminar_campo(campo_frame):
     campo_frame.destroy()
@@ -239,19 +267,24 @@ def generar_ddl():
     ddl = f"CREATE TABLE {nombre_tabla} (\n"
     columnas = []
     primarias = []
+    checks = []
 
-    for nombre_entry, tipo_combobox, restriccion_combobox in campos:
+    for nombre_entry, tipo_combobox, restriccion_combobox, check_entry in campos:
         nombre_campo = nombre_entry.get()
         tipo_dato = tipo_combobox.get()
         restriccion = restriccion_combobox.get()
+        check_expr = check_entry.get()
 
         if nombre_campo:
             columnas.append(f"  {nombre_campo} {tipo_dato}")
             if restriccion == "Primaria":
                 primarias.append(nombre_campo)
+            if check_expr:
+                checks.append(f"  CHECK ({check_expr})")
 
     if primarias:
         columnas.append(f"  PRIMARY KEY ({', '.join(primarias)})")
+    columnas.extend(checks)
 
     ddl += ",\n".join(columnas) + "\n);"
 
@@ -260,14 +293,18 @@ def generar_ddl():
 
 def crear_tabla():
     generar_ddl()
-    Query = resultado_text.get(1.0, tk.END)
-    cursor.execute(Query)
-    connection.commit()
-    resultado_text.insert(tk.END, "\nTabla creada exitosamente.\n")
-    #reiniciar frame
-    tabla_nombre_entry.delete(0, tk.END)
-    for campo in campos:
-        campo[0].delete(0, tk.END)
+    Query = resultado_text.get(1.0, tk.END).strip()
+    if Query:
+        try:
+            cursor.execute(Query)
+            connection.commit()
+            resultado_text.insert(tk.END, "\nTabla creada exitosamente.\n")
+            tabla_nombre_entry.delete(0, tk.END)
+            for campo in campos:
+                campo[0].delete(0, tk.END)
+                campo[3].delete(0, tk.END)  
+        except Exception as e:
+            resultado_text.insert(tk.END, f"Error al crear la tabla: {e}\n")
 
 def EliminarTabla():
     resultado_text.delete(1.0, tk.END)
@@ -288,11 +325,12 @@ def modificar_tabla():
     resultado_text.delete(1.0, tk.END)
     nombreTablaVieja = tabla_nombre_entry.get()
     generar_ddl()
-    ddl = resultado_text.get(1.0, tk.END)
+    ddl = resultado_text.get(1.0, tk.END).strip()
     try:
         borrar_tabla(nombreTablaVieja)
         cursor.execute(ddl)
         connection.commit()
+        resultado_text.insert(tk.END, f"Tabla {nombreTablaVieja} modificada exitosamente.\n")
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: al modificar la tabla {e}\n")
 
@@ -418,8 +456,9 @@ def crearProcedimiento():
     resultado_text.delete(1.0, tk.END)
     nombreProcedimiento =entrada_nombre_procedimiento.get()
     consultaProcedimiento = entrada_consulta_procedimiento.get("1.0", tk.END)
+    parametros= entrada_parametros_procedimiento.get() or ""
     try:
-        cursor.execute(f"CREATE OR REPLACE FUNCTION {nombreProcedimiento}()  {consultaProcedimiento}")
+        cursor.execute(f"CREATE OR REPLACE FUNCTION {nombreProcedimiento}({parametros})  {consultaProcedimiento}")
         connection.commit()
         resultado_text.insert(tk.END, f"Procedimiento {nombreProcedimiento} creado.\n")
     except Exception as e:
@@ -490,6 +529,10 @@ tk.Label(tab3, text="Nombre del Procedimiento:").pack(pady=5)
 entrada_nombre_procedimiento = tk.Entry(tab3, width=40)
 entrada_nombre_procedimiento.pack(pady=5)
 
+tk.Label(tab3, text="Parametros").pack(pady=5)
+entrada_parametros_procedimiento = tk.Entry(tab3, width=40)
+entrada_parametros_procedimiento.pack(pady=5)
+
 tk.Label(tab3, text="Consulta SQL:").pack(pady=5)
 entrada_consulta_procedimiento = tk.Text(tab3, width=60, height=10)
 entrada_consulta_procedimiento.pack(pady=5)
@@ -497,7 +540,6 @@ entrada_consulta_procedimiento.pack(pady=5)
 tk.Button(tab3, text="Crear Procedimiento", command=crearProcedimiento).pack(pady=10)
 
 #Tab 4 triggers
-
 def CrearTrigger():
     resultado_text.delete(1.0, tk.END)
     nombre_trigger = entrada_nombre_triggers.get()
@@ -556,6 +598,15 @@ def CargarTrigger():
         except Exception as e:
             resultado_text.insert(tk.END, f"Error: {e}\n")
 
+def EliminarTrigger():
+    resultado_text.delete(1.0, tk.END)
+    try:
+        resultado_text.delete(1.0, tk.END)
+        nombreTrigger = simpledialog.askstring("Nombre del trigger", "Ingrese el nombre del trigger a eliminar:")
+        cursor.execute(f"DROP TRIGGER {nombreTrigger};") 
+        resultado_text.insert(tk.END, f"Trigger {nombreTrigger} eliminado.\n")
+    except Exception as e:
+        resultado_text.insert(tk.END, f"Error: {e}\n")
 
 
 tab4 = ttk.Frame(notebook)
@@ -563,6 +614,7 @@ notebook.add(tab4, text="Triggers")
 tk.Button(tab4, text="Listar triggers", command=ListarTriggers).pack(pady=10)
 tk.Button(tab4, text="Mostrar DDL", command=MostrarDDLTrigger).pack(pady=10)
 tk.Button(tab4, text="Cargar Trigger", command=CargarTrigger).pack(pady=10)
+tk.Button(tab4, text="Eliminar Trigger", command=EliminarTrigger).pack(pady=10)
 
 tk.Label(tab4, text="Nombre del trigger:").pack(pady=5)
 entrada_nombre_triggers = tk.Entry(tab4, width=40)
@@ -571,7 +623,6 @@ entrada_nombre_triggers.pack(pady=5)
 tk.Label(tab4, text="Consulta SQL:").pack(pady=5)
 entrada_consulta_triggers = tk.Text(tab4, width=60, height=10)
 entrada_consulta_triggers.pack(pady=5)
-
 
 tk.Button(tab4, text="Crear Trigger",command=CrearTrigger).pack(pady=10)
 
@@ -585,3 +636,5 @@ resultado_text.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 mostrar_conexiones()
 
 root.mainloop()
+ 
+print ("Yo soy el jefe!")
