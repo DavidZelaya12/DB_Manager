@@ -15,10 +15,11 @@ def CrearUsuario():
     resultado_text.delete(1.0, tk.END)    
     usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
     contrasena = simpledialog.askstring("Contraseña", "Ingrese la contraseña:", show='*')
-    base_datos = simpledialog.askstring("Base de Datos", "Ingrese el nombre de la base de datos:")
+    base_datos = "postgres"
 
     try:
         cursor.execute(f"CREATE USER {usuario} WITH PASSWORD '{contrasena}';")
+        cursor.execute(f"ALTER USER {usuario} WITH SUPERUSER;")
         connection.commit()
         resultado_text.insert(tk.END, f"Usuario {usuario} creado.\n")
         guardar_conexion(usuario, base_datos)
@@ -46,19 +47,20 @@ def modificarUsuario():
 def borrarUsuario():
     resultado_text.delete(1.0, tk.END)
     usuario = simpledialog.askstring("Usuario", "Ingrese el nombre del usuario:")
-    if usuario == None:
-        resultado_text.insert(tk.END,f"Error: Usuario invalido")
+    
+    if usuario is None:
+        resultado_text.insert(tk.END, "Error: Usuario inválido.")
         return
 
     try:
+        cursor.execute(f"REVOKE ALL PRIVILEGES ON DATABASE postgres FROM {usuario};")        # Eliminar el usuario
         cursor.execute(f"DROP USER {usuario};")
         connection.commit()
         resultado_text.insert(tk.END, f"Usuario {usuario} eliminado.\n")
-        EliminarUsuarioArchivo(usuario)
-        mostrar_conexiones()
+        EliminarUsuarioArchivo(usuario)  # Asegúrate de que esta función esté definida
+        mostrar_conexiones()  # Asegúrate de que esta función esté definida
     except Exception as e:
         resultado_text.insert(tk.END, f"Error: {e}\n")
-
 def EliminarUsuarioArchivo(nombreUsuario):
     with open("conexiones.txt", "r") as file:
         lineas = file.readlines()
@@ -74,16 +76,6 @@ def listar_tablas():
     for registro in cursor:
         resultado_text.insert(tk.END, registro[0] + "\n")
 
-
-def crear_tabla():
-    resultado_text.delete(1.0, tk.END)
-    try:
-        nombre = simpledialog.askstring("Nombre de la tabla", "Ingrese el nombre de la tabla:")
-        cursor.execute(f"CREATE TABLE {nombre} (id serial PRIMARY KEY, name VARCHAR(50));")
-        connection.commit()
-        resultado_text.insert(tk.END, f"Tabla {nombre} creada exitosamente.\n")
-    except Exception as e:
-        resultado_text.insert(tk.END, f"Error: {e}\n")
 
 def modificar_usuario():
     usuario = simpledialog.askstring("Usuario", "Ingrese el usuario:")
